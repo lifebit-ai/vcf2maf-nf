@@ -12,8 +12,15 @@
 Channel.fromPath(params.somatic_vcf, type: 'file')
        .set { somatic_vcf_channel }
 
-Channel.fromPath(params.fasta, type: 'file')
-       .set { fasta_channel }
+// setup optional params (already in the container for GRCh37)
+params.fasta = params.genome ? params.genomes[ params.genome ].fasta ?: false : false
+fasta = file(params.fasta)
+params.fai = params.genome ? params.genomes[ params.genome ].fai ?: false : false
+fai = file(params.fai)
+params.filter_vcf = params.genome ? params.genomes[ params.genome ].filter_vcf ?: false : false
+filter_vcf = file(params.filter_vcf)
+params.vep_path = params.genome ? params.genomes[ params.genome ].vep_path ?: false : false
+vep_path = file(params.vep_path)
 
 // check if user set the params tumour_id & normal_id, if not get it from the VCF filename
 if (params.tumour_id == false && params.normal_id == false) {
@@ -34,22 +41,31 @@ process Vcf2maf {
     input:
     set val(tumour_id), val(normal_id) from ids
     each file(vcf) from somatic_vcf_channel
-    each file(fasta) from fasta_channel
+    each file(fasta_opt) from fasta
+    each file(fai_opt) from fai
+    each file(filter_vcf_opt) from filter_vcf
+    each file(vep_path_opt) from vep_path
 
     output:
     file("${tumour_id}_vs_${normal_id}.maf") into vcf_variant_eval
 
     script:
+    def fasta = fasta.name != 'NO_FILE' ? "$fasta_opt" : 'Homo_sapiens.GRCh37.75.dna.primary_assembly.fa'
+    def fai = fai.name != 'NO_FILE1' ? "$fai_opt" : ''
+    def filter_vcf = filter_vcf.name != 'NO_FILE2' ? "$filter_vcf_opt" : 'ExAC_nonTCGA.r0.3.1.sites.vep.vcf.gz'
+    def vep_path = vep_path.name != 'NO_FILE3' ? "$vep_path_opt" : "/opt/variant_effect_predictor_${params.vep_cache_version}/ensembl-tools-release-${params.vep_cache_version}/scripts/variant_effect_predictor"
+    def command = params.genome != 'GRCh37' ? "mv $fasta /vepdata/ && mv $fai /vepdata/ && mv $filter_vcf /vepdata" : ''
     """
+    $command
     perl /opt/vcf2maf/vcf2maf.pl \
     --input-vcf $vcf \
     --output-maf ${tumour_id}_vs_${normal_id}.maf  \
     --tumor-id $tumour_id \
     --normal-id $normal_id \
-    --ref-fasta /vepdata/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa \
+    --ref-fasta /vepdata/${fasta} \
     --ncbi-build ${params.genome} \
-    --filter-vcf /vepdata/ExAC_nonTCGA.r0.3.1.sites.vep.vcf.gz \
-    --vep-path /opt/variant_effect_predictor_${params.vep_cache_version}/ensembl-tools-release-${params.vep_cache_version}/scripts/variant_effect_predictor \
+    --filter-vcf /vepdata/${filter_vcf} \
+    --vep-path $vep_path \
     --vep-data /vepdata/ \
     --vep-forks ${params.vep_forks} \
     --buffer-size ${params.buffer_size} \
