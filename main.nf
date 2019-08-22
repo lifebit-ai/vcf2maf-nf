@@ -25,9 +25,15 @@ vep_path = file(params.vep_path)
 // check if user set the params tumour_id & normal_id, if not get it from the VCF filename
 if (params.tumour_id == false && params.normal_id == false) {
     vcf = params.somatic_vcf.split("/").last()
+    println("params.somatic_vcf:")
+    println(params.somatic_vcf)
+    println("vcf:")
+    println(vcf)
     tumour_regex= "(.+)_vs"
     normal_regex= "vs_(.+).vcf*"
     tumour_id = (vcf =~ tumour_regex)[0][1]
+    println("tumour_id:")
+    println(tumour_id)
     normal_id = (vcf =~ normal_regex)[0][1]
 } else {
     tumour_id = params.tumour_id
